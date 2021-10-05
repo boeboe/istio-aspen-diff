@@ -22,7 +22,7 @@ data:
       tracing:
         zipkin:
           address: zipkin.istio-system:9411
-    enablePrometheusMerge: true
+    enablePrometheusMerge: false
     rootNamespace: istio-system
     trustDomain: cluster.local
 ---
@@ -181,7 +181,6 @@ data:
     neverInjectSelector:
       []
     injectedAnnotations:
-    template: "{{ Template_Version_And_Istio_Version_Mismatched_Check_Installation }}"
     templates:
       sidecar: |
         {{- $containers := list }}
@@ -435,6 +434,10 @@ data:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['service.istio.io/canonical-revision']
+            - name: CERTIFICATE_CUSTOM_FIELDS_ANNOTATION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['certificate.aspenmesh.io/customFields']
             - name: PROXY_CONFIG
               value: |
                      {{ protoToJSON .ProxyConfig }}

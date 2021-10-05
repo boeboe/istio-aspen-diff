@@ -3,14 +3,14 @@
 ## Discovery Settings
 pilot:
   autoscaleEnabled: true
-  autoscaleMin: 1
+  autoscaleMin: 2
   autoscaleMax: 5
   replicaCount: 1
   rollingMaxSurge: 100%
   rollingMaxUnavailable: 25%
 
   hub: ""
-  tag: ""
+  tag: 1.9.8-am1
 
   # Can be a full hub/image:tag
   image: pilot
@@ -28,9 +28,9 @@ pilot:
     targetAverageUtilization: 80
 
   # if protocol sniffing is enabled for outbound
-  enableProtocolSniffingForOutbound: true
+  enableProtocolSniffingForOutbound: false
   # if protocol sniffing is enabled for inbound
-  enableProtocolSniffingForInbound: true
+  enableProtocolSniffingForInbound: false
 
   nodeSelector: {}
   podAnnotations: {}
@@ -129,6 +129,15 @@ sidecarInjectorWebhook:
   #
   # defaultTemplates: ["sidecar", "hello"]
   defaultTemplates: []
+
+  replicaCount: 2
+
+  podAntiAffinityLabelSelector:
+  - key: app
+    operator: In
+    values: sidecarInjectorWebhook
+    topologyKey: "kubernetes.io/hostname"
+
 istiodRemote:
   # Sidecar injector mutating webhook configuration url
   # For example: https://$remotePilotAddress:15017/inject
@@ -180,7 +189,7 @@ ownerName: ""
 # meshConfig defines runtime configuration of components, including Istiod and istio-agent behavior
 # See https://istio.io/docs/reference/config/istio.mesh.v1alpha1/ for all available options
 meshConfig:
-  enablePrometheusMerge: true
+  enablePrometheusMerge: false
   # Config for the default ProxyConfig.
   # Initially using directly the proxy metadata - can also be activated using annotations
   # on the pod. This is an unsupported low-level API, pending review and decisions on
@@ -203,7 +212,76 @@ meshConfig:
   # What we may configure in mesh config is the ".global" - and use of other suffixes.
   # No hurry to do this in 1.6, we're trying to prove the code.
 
+  # Config for the default ProxyConfig.
+  # Initially using directly the proxy metadata - can also be activated using annotations
+  # on the pod. This is an unsupported low-level API, pending review and decisions on
+  # enabling the feature. Enabling the DNS listener is safe - and allows further testing
+  # and gradual adoption by setting capture only on specific workloads. It also allows
+  # VMs to use other DNS options, like dnsmasq or unbound.
+  defaultConfig:
+    proxyMetadata:
+      # If empty, agent will not start :15013 DNS listener and will not attempt
+      # to connect to Istiod DNS-TLS. This will also disable the core dns sidecar in
+      # istiod and the dns-over-tls listener.
+      # DNS_AGENT: DNS-TLS
+      DNS_AGENT: ""
+
+      # If empty, DNS capture is disabled.
+      # If set, intercept UDP port :53 and redirect to localhost:15013
+      # Currently only 'ALL' capture is supported - we may refine it if we want
+      # finer grained control.
+      # DNS_CAPTURE: ALL
+
+    tracing:
+      tlsSettings:
+        mode: DISABLE # DISABLE, SIMPLE, MUTUAL, ISTIO_MUTUAL
+        clientCertificate: # example: /etc/istio/tracer/cert-chain.pem
+        privateKey:        # example: /etc/istio/tracer/key.pem
+        caCertificates:    # example: /etc/istio/tracer/root-cert.pem
+        sni:               # example: tracer.somedomain
+        subjectAltNames: []
+        # - tracer.somedomain
+
+  # Configures the access log for each sidecar.
+  # Options:
+  #   "" - disables access log
+  #   "/dev/stdout" - enables access log
+  accessLogFile: "/dev/stdout"
+
+  # Set the default behavior of the sidecar for handling outbound traffic from the application:
+  # ALLOW_ANY - outbound traffic to unknown destinations will be allowed, in case there are no
+  #   services or ServiceEntries for the destination port
+  # REGISTRY_ONLY - restrict outbound traffic to services defined in the service registry as well
+  #   as those defined through ServiceEntries
+  # ALLOW_ANY is the default in 1.1 and later.  This means each pod will be able to make outbound requests
+  # to services outside of the mesh without any ServiceEntry.
+  # REGISTRY_ONLY was the default in 1.0.  If this behavior is desired, set the value below to REGISTRY_ONLY.
+  outboundTrafficPolicy:
+    mode: REGISTRY_ONLY
+
 global:
+  certificatesTTL:
+    # the time from now for when a workload certificate is set to expire;
+    # the certificate will be rotated before that time
+    # format is done by duration (e.g. 36h30m15s)
+    workloadCertTtl: 24h
+
+    # the maximum TTL of issued workload certificates
+    # the default is 90 days (90 * 24 hours / day)
+    maxWorkloadCertTtl: 2160h
+
+    # The TTL of self-signed CA root certificate.
+    # the default is 10 years
+    selfSignedCACertTtl: 87600h
+
+  # generate certificates with SAN DNS extensions for workloads based
+  # on annotations with the associated service account
+  certificateCustomFields: false
+
+  # generate elliptical curve certificates for workloads when the root
+  # CA certificate also uses elliptical curve cryptography
+  enableEccCertificates: false
+
   # Used to locate istiod.
   istioNamespace: istio-system
   # enable pod disruption budget for the control plane, which is used to
@@ -228,9 +306,13 @@ global:
   # Default hub for Istio images.
   # Releases are published to docker hub under 'istio' project.
   # Dev builds from prow are on gcr.io
-  hub: docker.io/istio
+  hub: quay.io/aspenmesh/releases
+  # publicImagesHub is the hub where workload-injected public images like
+  # proxy_init and proxyv2 are published
+  publicImagesHub: quay.io/aspenmesh/am-istio
+
   # Default tag for Istio images.
-  tag: 1.9.8
+  tag: 1.9.8-am1
 
   # Specify image pull policy if default behavior isn't desired.
   # Default behavior: latest images will be Always else IfNotPresent.
@@ -241,8 +323,8 @@ global:
   # For components that don't use ServiceAccounts (i.e. grafana, servicegraph, tracing)
   # ImagePullSecrets will be added to the corresponding Deployment(StatefulSet) objects.
   # Must be set for any cluster configured with private docker registry.
-  imagePullSecrets: []
-  # - private-registry-key
+  imagePullSecrets:
+  - aspen-mesh-pull-secret
 
   # Enabled by default in master for maximising testing.
   istiod:
@@ -441,6 +523,17 @@ global:
   # Use the user-specified, secret volume mounted key and certs for Pilot and workloads.
   mountMtlsCerts: false
 
+  # Default mtls policy. If true, mtls between services will be enabled by default.
+  mtls:
+    # Default setting for service-to-service mtls. Can be set explicitly using
+    # destination rules or service annotations.
+    enabled: true
+    # If set to true, and a given service does not have a corresponding DestinationRule configured,
+    # or its DestinationRule does not have TLSSettings specified, Istio configures client side
+    # TLS configuration automatically, based on the server side mTLS authentication policy and the
+    # availibity of sidecars.
+    auto: false
+
   multiCluster:
     # Set to true to connect two kubernetes clusters via their respective
     # ingressgateway services when pods in each cluster cannot directly
@@ -508,3 +601,107 @@ global:
 base:
   # For istioctl usage to disable istio config crds in base
   enableIstioConfigCRDs: true
+
+aspen-mesh-controlplane:
+  enabled: true
+  image: controlplane-1.9.8-am1
+  modelruntimeImage: modelruntime-1.9.8-am1
+
+  imagePullSecrets:
+  - aspenmesh-kubernetes-pull-secret
+
+  replicaCount: 2
+
+  clusterId: demo
+
+  userAuth:
+    # "type" can be none, jwt or oauthOpenshift.  Configure details for your chosen type below, others are ignored.
+    type: jwt
+    jwt:
+      # jwks must provide a valid JWKs endpoint.
+      # Required: Valid endpoint to retrieve the JWKS from
+      jwks:
+      # redirectUrl must provide an unauthenticated redirect URL.
+      # Required: URL to redirect unauthenticated users to (to start the authentication workflow)
+      redirectUrl:
+      # claims can be added here to require claims be present in the JWT
+      # (e.g.: `claims: aud=aspenmesh:io,role=k8s:admin`).
+    oauthOpenshift:
+      # Optional: Where the Aspen Mesh dashboard will be exposed.  If provided we will configure
+      # an OpenShift route and set up redirect URIs.
+      host:
+
+  openshiftOauthProxy:
+    image: openshift-oauth-proxy-1.9.8-am1
+
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "160Mi"
+      cpu: "100m"
+  modelRuntimeResources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+
+aspen-mesh-dashboard:
+  enabled: true
+  image: dashboard-1.9.8-am1
+  replicaCount: 2
+
+aspen-mesh-secure-ingress:
+  enabled: true
+  image: secure-ingress-1.9.8-am1
+  # Email to use for Let's Encrypt registration (used for certificate expiry notices)
+  # Leave blank ("") if you wish to manage your own TLS certificates.
+  lets-encrypt-email: ""
+  resources: {}
+  externalDnsAnnotation: "policy.aspenmesh.io/externaldns"
+  externalDnsEnabled: false
+
+aspen-mesh-metrics-collector:
+  serviceImage: metrics-collector-service-1.9.8-am1
+  server:
+    serviceResources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+  alertmanagerImage: alertmanager-1.9.8-am1
+  configmapReloadImage: configmap-reloader-1.9.8-am1
+
+aspen-mesh-event-storage:
+  enabled: true
+
+traffic-claim-enforcer:
+  enabled: true
+  image: traffic-claim-enforcer-1.9.8-am1
+  resources: {}
+
+cert-manager:
+  enabled: true
+  fullnameOverride: aspen-mesh-cert-manager
+
+external-dns:
+  enabled: true
+  fullnameOverride: aspen-mesh-external-dns
+
+  annotationFilter: "policy.aspenmesh.io/externaldns=true"
+  policy: sync
+  provider: aws
+  sources: ["istio-gateway"]
+  txtOwnerId: aspen-mesh-secure-ingress
+
+istio_cni:
+  enabled: false
+
+citadel:
+  # to enable this feature you must setup a root CA in the istio-system namespace
+  enabled: false

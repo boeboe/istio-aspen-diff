@@ -1,6 +1,6 @@
 cni:
   hub: ""
-  tag: ""
+  tag: 1.9.8-am1
   image: install-cni
   pullPolicy: ""
 
@@ -13,12 +13,62 @@ cni:
 
   # CNI bin and conf dir override settings
   # defaults:
-  cniBinDir: /opt/cni/bin
-  cniConfDir: /etc/cni/net.d
-  cniConfFileName: ""
+  cniBinDir: /var/lib/cni/bin
+  cniConfDir: /etc/cni/multus/net.d
+  cniConfFileName: istio-cni.conf
 
   excludeNamespaces:
     - istio-system
+    - kube-node-lease
+    - kube-public
+    - kube-system
+    - openshift
+    - openshift-apiserver
+    - openshift-apiserver-operator
+    - openshift-authentication
+    - openshift-authentication-operator
+    - openshift-cloud-credential-operator
+    - openshift-cluster-machine-approver
+    - openshift-cluster-node-tuning-operator
+    - openshift-cluster-samples-operator
+    - openshift-cluster-storage-operator
+    - openshift-cluster-version
+    - openshift-config
+    - openshift-config-managed
+    - openshift-console
+    - openshift-console-operator
+    - openshift-controller-manager
+    - openshift-controller-manager-operator
+    - openshift-dns
+    - openshift-dns-operator
+    - openshift-etcd
+    - openshift-image-registry
+    - openshift-infra
+    - openshift-ingress
+    - openshift-ingress-operator
+    - openshift-insights
+    - openshift-kni-infra
+    - openshift-kube-apiserver
+    - openshift-kube-apiserver-operator
+    - openshift-kube-controller-manager
+    - openshift-kube-controller-manager-operator
+    - openshift-kube-scheduler
+    - openshift-kube-scheduler-operator
+    - openshift-machine-api
+    - openshift-machine-config-operator
+    - openshift-marketplace
+    - openshift-monitoring
+    - openshift-multus
+    - openshift-network-operator
+    - openshift-node
+    - openshift-openstack-infra
+    - openshift-operator-lifecycle-manager
+    - openshift-operators
+    - openshift-sdn
+    - openshift-service-ca
+    - openshift-service-ca-operator
+    - openshift-service-catalog-apiserver-operator
+    - openshift-service-catalog-controller-manager-operator
 
   # Custom annotations on pod level, if you need them
   podAnnotations: {}
@@ -31,7 +81,7 @@ cni:
 
   # Deploy the config files as plugin chain (value "true") or as standalone files in the conf dir (value "false")?
   # Some k8s flavors (e.g. OpenShift) do not support the chain approach, set to false if this is the case
-  chained: true
+  chained: false
 
   repair:
     enabled: true
@@ -50,6 +100,10 @@ cni:
   taint:
     enabled: false
 
+  components:
+    cni:
+      namespace: kube-system
+
 # Revision is set as 'version' label and part of the resource names when installing multiple control planes.
 revision: ""
 
@@ -57,13 +111,20 @@ revision: ""
 ownerName: ""
 
 global:
+  certificateCustomFields: false
+
+  # generated certificates will use signature algorithm
+  # ECDSA with a P-256 curve; for this to work, an ECDSA P-256 certificate must
+  # be loaded in as the root CA certificate
+  enableEccCertificates: false
+
   # Default hub for Istio images.
   # Releases are published to docker hub under 'istio' project.
   # Dev builds from prow are on gcr.io
-  hub: docker.io/istio
+  hub: quay.io/aspenmesh/releases
 
   # Default tag for Istio images.
-  tag: 1.9.8
+  tag: latest
 
   # Specify image pull policy if default behavior isn't desired.
   # Default behavior: latest images will be Always else IfNotPresent.
@@ -74,5 +135,6 @@ global:
   # For components that don't use ServiceAccounts (i.e. grafana, servicegraph, tracing)
   # ImagePullSecrets will be added to the corresponding Deployment(StatefulSet) objects.
   # Must be set for any cluster configured with private docker registry.
-  imagePullSecrets: []
-  # - private-registry-key
+  imagePullSecrets:
+  - aspen-mesh-pull-secret
+    # - private-registry-key

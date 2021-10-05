@@ -59,8 +59,6 @@ Istio is composed of these components:
 
     - **Galley** - Responsible for validating, ingesting, aggregating, transforming and distributing config within Istio.
 
-- **Operator** - The component provides user friendly options to operate the Istio service mesh.
-
 ## Repositories
 
 The Istio project is divided across a few GitHub repositories:

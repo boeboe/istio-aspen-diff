@@ -42,7 +42,7 @@ rules:
 
   # discovery and routing
   - apiGroups: [""]
-    resources: ["pods", "nodes", "services", "namespaces", "endpoints"]
+    resources: ["pods", "nodes", "services", "namespaces", "endpoints", "serviceaccounts"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["discovery.k8s.io"]
     resources: ["endpointslices"]
@@ -121,7 +121,7 @@ rules:
     resources: ["*"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
-    resources: ["endpoints", "pods", "services", "nodes", "replicationcontrollers", "namespaces", "secrets"]
+    resources: ["endpoints", "pods", "services", "nodes", "replicationcontrollers", "namespaces", "secrets", "serviceaccounts"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["networking.istio.io"]
     verbs: [ "get", "watch", "list" ]

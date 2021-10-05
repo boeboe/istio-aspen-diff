@@ -37,10 +37,15 @@ spec:
   {{ else -}}
   - name: istio-init
   {{ end -}}
-  {{- if contains "/" (annotation .ObjectMeta `sidecar.istio.io/proxyImage` .Values.global.proxy_init.image) }}
-    image: "{{ annotation .ObjectMeta `sidecar.istio.io/proxyImage` .Values.global.proxy_init.image }}"
+  {{- if contains "quay.io/aspenmesh/" .Values.global.hub }}
+  # This is not handling the airgap case. If the global hub value matches the
+  # default hub, we are not in airgap mode. Use the image from our public image
+  # hub
+    image: "{{ .Values.global.publicImagesHub }}:{{ .Values.global.proxy_init.image }}-{{ .Values.global.tag }}"
   {{- else }}
-    image: "{{ .Values.global.hub }}/{{ .Values.global.proxy_init.image }}:{{ .Values.global.tag }}"
+  # If the global hub value does not match the default, we are in airgap mode. Use the image
+  # that has been published to the customer's internal registry.
+    image: "{{ .Values.global.hub }}:{{ .Values.global.proxy_init.image }}-{{ .Values.global.tag }}"
   {{- end }}
     args:
     - istio-iptables
@@ -144,10 +149,15 @@ spec:
     - sysctl -w kernel.core_pattern=/var/lib/istio/data/core.proxy && ulimit -c unlimited
     command:
       - /bin/sh
-  {{- if contains "/" (annotation .ObjectMeta `sidecar.istio.io/proxyImage` .Values.global.proxy_init.image) }}
-    image: "{{ annotation .ObjectMeta `sidecar.istio.io/proxyImage` .Values.global.proxy_init.image }}"
+  {{- if contains "quay.io/aspenmesh/" .Values.global.hub }}
+  # This is not handling the airgap case. If the global hub value matches the
+  # default hub, we are not in airgap mode. Use the image from our public image
+  # hub
+    image: "{{ .Values.global.publicImagesHub }}:{{ .Values.global.proxy_init.image }}-{{ .Values.global.tag }}"
   {{- else }}
-    image: "{{ .Values.global.hub }}/{{ .Values.global.proxy_init.image }}:{{ .Values.global.tag }}"
+  # If the global hub value does not match the default, we are in airgap mode. Use the image
+  # that has been published to the customer's internal registry.
+    image: "{{ .Values.global.hub }}:{{ .Values.global.proxy_init.image }}-{{ .Values.global.tag }}"
   {{- end }}
     imagePullPolicy: "{{ valueOrDefault .Values.global.imagePullPolicy `Always` }}"
     resources: {}
@@ -167,9 +177,20 @@ spec:
   containers:
   - name: istio-proxy
   {{- if contains "/" (annotation .ObjectMeta `sidecar.istio.io/proxyImage` .Values.global.proxy.image) }}
+  # This preserves the image overrided via the annotation
     image: "{{ annotation .ObjectMeta `sidecar.istio.io/proxyImage` .Values.global.proxy.image }}"
   {{- else }}
-    image: "{{ .Values.global.hub }}/{{ .Values.global.proxy.image }}:{{ .Values.global.tag }}"
+  # This is handling the case where there is no annotation
+  {{- if contains "quay.io/aspenmesh/" .Values.global.hub }}
+  # This is not handling the airgap case. If the global hub value matches the
+  # default hub, we are not in airgap mode. Use the image from our public image
+  # hub
+    image: "{{ .Values.global.publicImagesHub }}:{{ .Values.global.proxy.image }}-{{ .Values.global.tag }}"
+  {{- else }}
+  # If the global hub value does not match the default, we are in airgap mode. Use the image
+  # that has been published to the customer's internal registry.
+    image: "{{ .Values.global.hub }}:{{ .Values.global.proxy.image }}-{{ .Values.global.tag }}"
+  {{- end }}
   {{- end }}
     ports:
     - containerPort: 15090
@@ -249,6 +270,10 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: metadata.labels['service.istio.io/canonical-revision']
+    - name: CERTIFICATE_CUSTOM_FIELDS_ANNOTATION
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.annotations['certificate.aspenmesh.io/customFields']
     - name: PROXY_CONFIG
       value: |
              {{ protoToJSON .ProxyConfig }}

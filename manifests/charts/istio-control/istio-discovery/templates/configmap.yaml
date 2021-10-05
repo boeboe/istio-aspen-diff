@@ -69,6 +69,34 @@
 {{- $originalMesh := include "mesh" . | fromYaml }}
 {{- $mesh := mergeOverwrite $originalMesh .Values.meshConfig }}
 
+{{/* We take the merged in mesh config above and merge with .Values.jaeger configuration */}}
+{{- define "tracing-jaeger" }}
+    {{- if .Values.jaeger }}
+    {{- if .Values.jaeger.enabled }}
+    {{- if .Values.jaeger.custom_tags }}
+    defaultConfig:
+      tracing:
+        custom_tags:
+    {{- end }}
+    {{ range $index, $tag := .Values.jaeger.custom_tags }}
+          {{ $tag.tag }}:
+          {{- if $tag.header }}
+            header:
+              name: {{ $tag.header.name }}
+              {{- if $tag.header.defaultValue }}
+              defaultValue: {{ $tag.header.defaultValue }}
+              {{- end}}
+          {{- else if $tag.literal }}
+            literal:
+              value: {{ $tag.literal.value }}
+          {{- end }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+{{- end }}
+{{- $tracingMesh := include "tracing-jaeger" . | fromYaml }}
+{{- $mesh = mergeOverwrite $tracingMesh $mesh }}
+
 {{- if .Values.pilot.configMap }}
 apiVersion: v1
 kind: ConfigMap

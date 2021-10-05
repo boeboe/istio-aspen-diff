@@ -156,7 +156,7 @@ ownerName: ""
 # meshConfig defines runtime configuration of components, including Istiod and istio-agent behavior
 # See https://istio.io/docs/reference/config/istio.mesh.v1alpha1/ for all available options
 meshConfig:
-  enablePrometheusMerge: true
+  enablePrometheusMerge: false
   # Config for the default ProxyConfig.
   # Initially using directly the proxy metadata - can also be activated using annotations
   # on the pod. This is an unsupported low-level API, pending review and decisions on
@@ -176,7 +176,28 @@ meshConfig:
 # What we may configure in mesh config is the ".global" - and use of other suffixes.
 # No hurry to do this in 1.6, we're trying to prove the code.
 
+  # Configures the access log for each sidecar.
+  # Options:
+  #   "" - disables access log
+  #   "/dev/stdout" - enables access log
+  accessLogFile: "/dev/stdout"
+
+  # Set the default behavior of the sidecar for handling outbound traffic from the application:
+  # ALLOW_ANY - outbound traffic to unknown destinations will be allowed, in case there are no
+  #   services or ServiceEntries for the destination port
+  # REGISTRY_ONLY - restrict outbound traffic to services defined in the service registry as well
+  #   as those defined through ServiceEntries
+  # ALLOW_ANY is the default in 1.1 and later.  This means each pod will be able to make outbound requests
+  # to services outside of the mesh without any ServiceEntry.
+  # REGISTRY_ONLY was the default in 1.0.  If this behavior is desired, set the value below to REGISTRY_ONLY.
+  outboundTrafficPolicy:
+    mode: REGISTRY_ONLY
+
 global:
+  certificateCustomFields: false
+
+  enableEccCertificates: false
+
   # Used to locate istiod.
   istioNamespace: istio-system
   # enable pod disruption budget for the control plane, which is used to
@@ -196,12 +217,18 @@ global:
       # limits:
       #   cpu: 100m
       #   memory: 128Mi
+
   # Default hub for Istio images.
   # Releases are published to docker hub under 'istio' project.
   # Dev builds from prow are on gcr.io
-  hub: docker.io/istio
+  hub: quay.io/aspenmesh/releases
+  # publicImagesHub is the hub where workload-injected public images like
+  # proxy_init and proxyv2 are published
+  publicImagesHub: quay.io/aspenmesh/am-istio
+
   # Default tag for Istio images.
-  tag: 1.9.8
+  tag: 1.9.8-am1
+
   # Specify image pull policy if default behavior isn't desired.
   # Default behavior: latest images will be Always else IfNotPresent.
   imagePullPolicy: ""
@@ -210,8 +237,8 @@ global:
   # For components that don't use ServiceAccounts (i.e. grafana, servicegraph, tracing)
   # ImagePullSecrets will be added to the corresponding Deployment(StatefulSet) objects.
   # Must be set for any cluster configured with private docker registry.
-  imagePullSecrets: []
-  # - private-registry-key
+  imagePullSecrets:
+  - aspen-mesh-pull-secret
 
   # Enabled by default in master for maximising testing.
   istiod:

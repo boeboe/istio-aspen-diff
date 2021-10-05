@@ -1,5 +1,4 @@
-Minimal control plane for Istio. Pilot and mesh config are included.
+Thank you for installing Aspen Mesh {{ .Release.version }}
 
-MCP and injector should optionally be installed in the same namespace. Alternatively remote
-address of an MCP server can be set.
+Your release is named {{ .Release.Name }}
 

@@ -72,10 +72,15 @@ spec:
 {{- if .Values.global.proxy.enableCoreDump }}
       initContainers:
         - name: enable-core-dump
-{{- if contains "/" .Values.global.proxy.image }}
-          image: "{{ .Values.global.proxy.image }}"
+{{- if contains "quay.io/aspenmesh/" .Values.global.hub }}
+# This is not handling the airgap case. If the global hub value matches the
+# default hub, we are not in airgap mode. Use the image from our public image
+# hub
+          image: "{{ .Values.global.publicImagesHub }}:{{ .Values.global.proxy.image }}-{{ .Values.global.tag }}"
 {{- else }}
-          image: "{{ .Values.global.hub }}/{{ .Values.global.proxy.image | default "proxyv2" }}:{{ .Values.global.tag }}"
+# If the global hub value does not match the default, we are in airgap mode. Use the image
+# that has been published to the customer's internal registry.
+          image: "{{ .Values.global.hub }}:{{ .Values.global.proxy.image }}-{{ .Values.global.tag }}"
 {{- end }}
 {{- if .Values.global.imagePullPolicy }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
@@ -93,10 +98,15 @@ spec:
 {{- end }}
       containers:
         - name: istio-proxy
-{{- if contains "/" .Values.global.proxy.image }}
-          image: "{{ .Values.global.proxy.image }}"
+{{- if contains "quay.io/aspenmesh/" .Values.global.hub }}
+# This is not handling the airgap case. If the global hub value matches the
+# default hub, we are not in airgap mode. Use the image from our public image
+# hub
+          image: "{{ .Values.global.publicImagesHub }}:{{ .Values.global.proxy.image }}-{{ .Values.global.tag }}"
 {{- else }}
-          image: "{{ .Values.global.hub }}/{{ .Values.global.proxy.image | default "proxyv2" }}:{{ .Values.global.tag }}"
+# If the global hub value does not match the default, we are in airgap mode. Use the image
+# that has been published to the customer's internal registry.
+          image: "{{ .Values.global.hub }}:{{ .Values.global.proxy.image }}-{{ .Values.global.tag }}"
 {{- end }}
 {{- if .Values.global.imagePullPolicy }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
@@ -157,6 +167,12 @@ spec:
 {{ toYaml .Values.global.defaultResources | indent 12 }}
 {{- end }}
           env:
+          - name: SECRET_TTL
+            value: "{{ .Values.global.certificatesTTL.workloadCertTtl }}"
+{{- if .Values.global.enableEccCertificates }}
+          - name: ECC_SIGNATURE_ALGORITHM
+            value: ECDSA
+{{- end }}
           - name: JWT_POLICY
             value: {{ .Values.global.jwtPolicy }}
           - name: PILOT_CERT_PROVIDER
@@ -204,6 +220,10 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.labels['service.istio.io/canonical-revision']
+          - name: CERTIFICATE_CUSTOM_FIELDS_ANNOTATION
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.annotations['certificate.aspenmesh.io/customFields']
           - name: ISTIO_META_WORKLOAD_NAME
             value: {{ $gateway.name }}
           - name: ISTIO_META_OWNER
